@@ -62,6 +62,7 @@ from blueprints.telegram import telegram_bp  # Import the telegram blueprint
 from blueprints.traffic import traffic_bp  # Import the traffic blueprint
 from blueprints.tv_json import tv_json_bp
 from blueprints.websocket_example import websocket_bp  # Import the websocket example blueprint
+from blueprints.sector_heatmap import sector_heatmap_bp # sector-scope
 from cors import cors  # Import the CORS instance
 from csp import apply_csp_middleware  # Import the CSP middleware
 from database.action_center_db import init_db as ensure_action_center_tables_exists
@@ -239,6 +240,8 @@ def create_app():
     app.register_blueprint(flow_bp)  # Register Flow blueprint
     app.register_blueprint(broker_credentials_bp)  # Register Broker credentials blueprint
     app.register_blueprint(system_permissions_bp)  # Register System permissions blueprint
+    app.register_blueprint(sector_heatmap_bp)
+
 
     # Exempt webhook endpoints from CSRF protection after app initialization
     with app.app_context():

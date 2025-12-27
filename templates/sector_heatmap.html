@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sector Heatmap</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.18/dist/full.min.css" rel="stylesheet" />
+</head>
+
+<body class="bg-base-200 p-6">
+
+<div class="flex justify-between mb-6">
+  <h1 class="text-2xl font-bold">📊 Sector Heatmap</h1>
+
+  <select id="exchange" class="select select-bordered">
+    <option value="NSE">NSE</option>
+    <option value="NSE_FO">NSE F&O</option>
+  </select>
+</div>
+
+<div id="heatmap" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+
+<script src="/static/js/sector.js"></script>
+</body>
+</html>

@@ -110,32 +110,32 @@ def ema_strategy():
             # Execute Buy Order
             if crossover and position <= 0:
                 position = quantity
-                response = client.placesmartorder(
-                    strategy=strategy,
-                    symbol=symbol,
-                    action="BUY",
-                    exchange=exchange,
-                    price_type="MARKET",
-                    product=product,
-                    quantity=quantity,
-                    position_size=position
-                )
-                print("Buy Order Response:", response)
+                # response = client.placesmartorder(
+                #     strategy=strategy,
+                #     symbol=symbol,
+                #     action="BUY",
+                #     exchange=exchange,
+                #     price_type="MARKET",
+                #     product=product,
+                #     quantity=quantity,
+                #     position_size=position
+                # )
+                # print("Buy Order Response:", response)
 
             # Execute Sell Order
             elif crossunder and position >= 0:
                 position = quantity * -1
-                response = client.placesmartorder(
-                    strategy=strategy,
-                    symbol=symbol,
-                    action="SELL",
-                    exchange=exchange,
-                    price_type="MARKET",
-                    product=product,
-                    quantity=quantity,
-                    position_size=position
-                )
-                print("Sell Order Response:", response)
+                # response = client.placesmartorder(
+                #     strategy=strategy,
+                #     symbol=symbol,
+                #     action="SELL",
+                #     exchange=exchange,
+                #     price_type="MARKET",
+                #     product=product,
+                #     quantity=quantity,
+                #     position_size=position
+                # )
+                # print("Sell Order Response:", response)
 
             # Log strategy information
             print("\nStrategy Status:")
