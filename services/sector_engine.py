@@ -4,11 +4,64 @@ from openalgo import api
 import pandas as pd
 import numpy as np
 import datetime as datetime, time
-from data.sector_map import SECTOR_MAP, SECTOR_MAP_REFINED
+# from data.sector_map import SECTOR_MAP, SECTOR_MAP_REFINED
+
+SECTOR_MAP = {
+  "IT": [
+    "TCS", "INFY", "HCLTECH", "WIPRO", "LTIM", 
+    "TECHM", "PERSISTENT", "COFORGE", "MPHASIS", "OFSS"
+  ],
+  "Banking": [
+    "HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", 
+    "INDUSINDBK", "BANKBARODA", "PNB", "CANBK", "AUBANK", 
+    "IDFCFIRSTB", "FEDERALBNK"
+  ],
+  "Auto": [
+    "MARUTI", "M&M", "TATAMOTORS", "BAJAJ-AUTO", "EICHERMOT", 
+    "TVSMOTOR", "HEROMOTOCO", "MOTHERSON", "BHARATFORG", "BOSCHLTD", 
+    "ASHOKLEY", "TIINDIA", "SONACOMS", "UNOMINDA", "EXIDEIND"
+  ],
+  "Pharma": [
+    "SUNPHARMA", "CIPLA", "DRREDDY", "DIVISLAB", "TORNTPHARM", 
+    "ZYDUSLIFE", "MANKIND", "LUPIN", "AUROPHARMA", "ALKEM", 
+    "ABBOTINDIA", "GLENMARK", "BIOCON", "IPCALAB", "AJANTPHARM", 
+    "JBCHEPHARM", "GLAND", "WOCKPHARMA", "PIRPHARMA", "LAURUSLABS"
+  ],
+  "FMCG": [
+    "HINDUNILVR", "ITC", "NESTLEIND", "BRITANNIA", "TATACONSUM", 
+    "VBL", "GODREJCP", "DABUR", "MARICO", "COLPAL", 
+    "PGHH", "BALRAMCHIN", "UNITEDBN", "RADICO", "EMAMILTD"
+  ],
+  "Metal": [
+    "ADANIENT", "JSWSTEEL", "TATASTEEL", "HINDALCO", "VEDL", 
+    "JINDALSTEL", "NMDC", "HINDZINC", "SAIL", "NATIONALUM", 
+    "JSL", "APLAPOLLO", "LLOYDSME", "HINDCOPPER", "WELCORP"
+  ],
+  "Financial_Services": [
+    "HDFCBANK", "ICICIBANK", "SBIN", "BAJFINANCE", "KOTAKBANK", 
+    "AXISBANK", "BAJAJFINSV", "SBILIFE", "JIOFIN", "SHRIRAMFIN", 
+    "HDFCLIFE", "CHOLAFIN", "MUTHOOTFIN", "PFC", "RECLTD", 
+    "BSE", "ICICIGI", "ICICIPRULI", "SBICARD", "LICHSGFIN"
+  ],
+  "Oil_And_Gas": [
+    "RELIANCE", "ONGC", "IOC", "BPCL", "GAIL", 
+    "HPCL", "OIL", "ATGL", "PETRONET", "IGL", 
+    "GUJGASLTD", "MGL", "GSPL", "CASTROLIND", "AEGISCHEM"
+  ],
+  "Consumer_Durables": [
+    "TITAN", "HAVELLS", "DIXON", "KALYANKJIL", "VOLTAS", 
+    "BLUESTARCO", "AMBER", "CROMPTON", "VGUARD", "BATAINDIA", 
+    "WHIRLPOOL", "KAJARIACER", "CENTURYPLY", "PGEL", "CERA"
+  ],
+  "Realty": [
+    "DLF", "LODHA", "PRESTIGE", "GODREJPROP", "OBEROIRLTY", 
+    "PHOENIXLTD", "BRIGADE", "SOBHA", "SIGNATURE", "ANANTRAJ"
+  ]
+}
 
 RATE_LIMIT_SLEEP = 0.4  # 3 req/sec safe
 
-api_key = os.getenv('OPENALGO_APIKEY')
+api_key = '060f6506d732c6e2609d4c8dcaf612bcec9fc7bc92d49d05333a2ba544edcda1'
 
 if not api_key:
     print("Error: OPENALGO_APIKEY environment variable not set")
@@ -117,14 +170,13 @@ def get_today_range():
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     return today, today
 
-def fetch_sector_wise_scope(client, exchange, interval="5m"):
+def fetch_sector_wise_scope(client, exchange="NSE", interval="5m"):
     start_date , end_date = get_today_range()
     sector_results = {}
 
     for sector , symbols in SECTOR_MAP.items():
         frames = []
-        quote_symbols = [{"symbol": s, "exchange": "NSE", "start_date":"26-12-2025",
-                    "end_date":"26-12-2025"} for s in symbols]
+        quote_symbols = [{"symbol": s, "exchange": "NSE"} for s in symbols]
         response = client.multiquotes(symbols=quote_symbols)
         print(symbols, type(response))
 

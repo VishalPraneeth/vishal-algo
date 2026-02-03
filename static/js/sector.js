@@ -6,7 +6,7 @@ exchangeSelect.addEventListener("change", loadData);
 async function loadData() {
   heatmap.innerHTML = "<span class='loading loading-spinner'></span>";
 
-  const exchange = exchangeSelect.value;
+  const exchange = 'NSE';
   const res = await fetch(`/api/v1/sector-heatmap?exchange=${exchange}`);
   const json = await res.json();
 

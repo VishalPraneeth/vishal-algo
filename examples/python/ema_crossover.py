@@ -12,7 +12,7 @@ api_key = "your-openalgo-api-key"
 
 # Set the strategy details and trading parameters
 strategy = "EMA Crossover Python"
-symbol = "BHEL"  # OpenAlgo Symbol
+symbol = "BOSCHLTD"  # OpenAlgo Symbol
 exchange = "NSE"
 product = "MIS"
 quantity = 1
