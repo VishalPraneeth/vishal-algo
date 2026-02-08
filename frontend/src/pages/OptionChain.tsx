@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useOptionChainLive } from '@/hooks/useOptionChainLive'
 import { useOptionChainPreferences } from '@/hooks/useOptionChainPreferences'
 import { oiProfileApi } from '@/api/oi-profile'
-import type { BarDataSource, BarStyle, ColumnKey, OptionStrike } from '@/types/option-chain'
+import type { BarDataSource, BarStyle, ColumnKey, OptionChainResponse, OptionStrike } from '@/types/option-chain'
 import { COLUMN_DEFINITIONS } from '@/types/option-chain'
 import { BarSettingsDropdown, ColumnConfigDropdown, ColumnReorderPanel } from '@/components/option-chain'
 import { PlaceOrderDialog } from '@/components/trading'
@@ -124,6 +124,155 @@ function getMaxValue(chain: OptionStrike[], dataSource: BarDataSource): number {
   })
   return maxVal || 1
 }
+
+// Sentiment calculation functions
+interface SentimentData {
+  score: number; // -10 to +10
+  callPremiumTrend: number;
+  putPremiumTrend: number;
+  maxPain: number;
+  strength: 'Strong' | 'Moderate' | 'Weak';
+}
+
+function calculateSentiment(data: OptionChainResponse): SentimentData {
+  const chain = data.chain;
+  
+  // 1. PCR-based sentiment (-3 to +3)
+  const pcr = calculatePCR(chain);
+  let pcrScore = 0;
+  // FIXED: High PCR = more puts = bearish
+  if (pcr > 1.5) pcrScore = -3; // Strongly Bearish
+  else if (pcr > 1.2) pcrScore = -2; // Bearish
+  else if (pcr > 0.9) pcrScore = -1; // Mildly Bearish
+  else if (pcr < 0.5) pcrScore = 3; // Strongly Bullish
+  else if (pcr < 0.7) pcrScore = 2; // Bullish
+  else if (pcr < 0.9) pcrScore = 1; // Mildly Bullish
+  
+  // 2. OI concentration analysis (-2 to +2)
+  // High call OI = resistance/bearish, High put OI = support/bullish
+  const atmIndex = chain.findIndex(strike => 
+    Math.abs(strike.strike - data.atm_strike) < 0.01
+  );
+  
+  let oiScore = 0;
+  const nearbyStrikes = chain.slice(Math.max(0, atmIndex - 2), Math.min(chain.length, atmIndex + 3));
+  
+  const totalCallOI = nearbyStrikes.reduce((sum, strike) => sum + (strike.ce?.oi || 0), 0);
+  const totalPutOI = nearbyStrikes.reduce((sum, strike) => sum + (strike.pe?.oi || 0), 0);
+  
+  if (totalCallOI > totalPutOI * 1.3) oiScore = -2; // Call resistance
+  else if (totalPutOI > totalCallOI * 1.3) oiScore = 2; // Put support
+  
+  // 3. Premium analysis (-2 to +2)
+  const atmCall = chain.find(strike => 
+    Math.abs(strike.strike - data.atm_strike) < 0.01
+  )?.ce;
+  
+  const atmPut = chain.find(strike => 
+    Math.abs(strike.strike - data.atm_strike) < 0.01
+  )?.pe;
+  
+  let premiumScore = 0;
+  if (atmCall && atmPut) {
+    const callPutRatio = atmCall.ltp / atmPut.ltp;
+    if (callPutRatio > 1.2) premiumScore = 1; // Calls expensive = bullish
+    else if (callPutRatio < 0.8) premiumScore = -1; // Puts expensive = bearish
+  }
+  
+  // 4. Volume analysis (-1 to +1)
+  // FIXED: High call volume = bullish
+  const totals = calculateTotals(chain);
+  const volumeRatio = totals.ceVolume / totals.peVolume;
+  let volumeScore = 0;
+  if (volumeRatio > 1.5) volumeScore = 1; // More call volume = bullish
+  else if (volumeRatio < 0.67) volumeScore = -1; // More put volume = bearish
+  
+  // 5. Trend analysis (-2 to +2)
+  const spotTrend = data.underlying_ltp > data.underlying_prev_close ? 1 : -1;
+  
+  // Calculate premium trends (FIXED: pass ATM strike)
+  const callPremiumTrend = calculatePremiumTrend(chain, 'ce', data.atm_strike);
+  const putPremiumTrend = calculatePremiumTrend(chain, 'pe', data.atm_strike);
+  
+  // Combine scores (-10 to +10 range)
+  const totalScore = pcrScore + oiScore + premiumScore + volumeScore + spotTrend;
+  
+  const normalizedScore = Math.max(-10, Math.min(10, totalScore));
+  
+  return {
+    score: normalizedScore,
+    callPremiumTrend,
+    putPremiumTrend,
+    maxPain: calculateMaxPain(chain),
+    strength: Math.abs(normalizedScore) > 7 ? 'Strong' : 
+              Math.abs(normalizedScore) > 3 ? 'Moderate' : 'Weak'
+  };
+}
+
+function calculatePremiumTrend(chain: OptionStrike[], type: 'ce' | 'pe', atmStrikeValue: number): number {
+  // Compare ATM premium with OTM premiums
+  const atmStrike = chain.reduce((prev, curr) => 
+    Math.abs(curr.strike - atmStrikeValue) < Math.abs(prev.strike - atmStrikeValue) ? curr : prev
+  );
+  
+  const atmPremium = type === 'ce' ? atmStrike.ce?.ltp : atmStrike.pe?.ltp;
+  const otmStrike = chain.find(s => 
+    type === 'ce' ? s.strike > atmStrike.strike + 50 : s.strike < atmStrike.strike - 50
+    // Add some buffer to ensure we get a truly OTM strike
+  );
+  
+  const otmPremium = otmStrike ? (type === 'ce' ? otmStrike.ce?.ltp : otmStrike.pe?.ltp) : 0;
+  
+  if (!atmPremium || !otmPremium || otmPremium === 0) return 0;
+  
+  // Return percentage difference
+  return ((atmPremium - otmPremium) / otmPremium) * 100;
+}
+
+function calculateMaxPain(chain: OptionStrike[]): number {
+  // Simplified max pain calculation
+  const strikes = chain.map(s => s.strike);
+  let minPain = Infinity;
+  let maxPainStrike = strikes[0];
+  
+  strikes.forEach(strike => {
+    let pain = 0;
+    chain.forEach(option => {
+      if (option.ce && option.strike < strike) {
+        pain += (strike - option.strike) * (option.ce.oi || 0);
+      }
+      if (option.pe && option.strike > strike) {
+        pain += (option.strike - strike) * (option.pe.oi || 0);
+      }
+    });
+    
+    if (pain < minPain) {
+      minPain = pain;
+      maxPainStrike = strike;
+    }
+  });
+  
+  return maxPainStrike;
+}
+
+function getSentimentText(score: number): string {
+  if (score >= 8) return 'Strong Buy';
+  if (score >= 4) return 'Buy';
+  if (score >= 1) return 'Mild Buy';
+  if (score <= -8) return 'Strong Sell';
+  if (score <= -4) return 'Sell';
+  if (score <= -1) return 'Mild Sell';
+  return 'Neutral';
+}
+
+function getSentimentColor(score: number): string {
+  if (score >= 4) return 'text-green-600';
+  if (score >= 1) return 'text-green-400';
+  if (score <= -4) return 'text-red-600';
+  if (score <= -1) return 'text-red-400';
+  return 'text-yellow-500';
+}
+
 
 interface PlaceOrderParams {
   symbol: string
@@ -568,6 +717,7 @@ export default function OptionChain() {
   const pcr = useMemo(() => (data?.chain ? calculatePCR(data.chain) : 0), [data?.chain])
   const totals = useMemo(() => (data?.chain ? calculateTotals(data.chain) : { ceVolume: 0, peVolume: 0, ceOi: 0, peOi: 0 }), [data?.chain])
   const maxBarValue = useMemo(() => (data?.chain ? getMaxValue(data.chain, barDataSource) : 1), [data?.chain, barDataSource])
+  const sentiment = useMemo(() => (data?.chain ? calculateSentiment(data) : { score: 0, callPremiumTrend: 0, putPremiumTrend: 0, maxPain: 0, strength: 'Weak' }), [data?.chain])
 
   // Get ordered visible columns for each side
   const visibleCeColumns = useMemo(() => {
@@ -684,7 +834,7 @@ export default function OptionChain() {
 
       {data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card>
               <CardContent className="p-4">
                 <div className="text-sm text-muted-foreground">{selectedUnderlying} Spot</div>
@@ -726,6 +876,67 @@ export default function OptionChain() {
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>PCR: {pcr.toFixed(2)}</span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm text-muted-foreground">Market Sentiment</div>
+                  <div className={`text-sm font-bold ${getSentimentColor(sentiment.score)}`}>
+                    {getSentimentText(sentiment.score)}
+                  </div>
+                </div>
+                
+                {/* Sentiment Indicators */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">PCR Sentiment:</span>
+                    <span className={pcr > 1.3 ? 'text-green-500 font-medium' : pcr < 0.7 ? 'text-red-500 font-medium' : 'text-yellow-500'}>
+                      {pcr > 1.3 ? 'Bullish' : pcr < 0.7 ? 'Bearish' : 'Neutral'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Max Pain:</span>
+                    <span className="font-medium">{formatPrice(calculateMaxPain(data.chain))}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Call Premium:</span>
+                    <span className={sentiment.callPremiumTrend > 0 ? 'text-green-500' : 'text-red-500'}>
+                      {sentiment.callPremiumTrend > 0 ? '↑' : '↓'} {Math.abs(sentiment.callPremiumTrend).toFixed(1)}%
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Put Premium:</span>
+                    <span className={sentiment.putPremiumTrend > 0 ? 'text-green-500' : 'text-red-500'}>
+                      {sentiment.putPremiumTrend > 0 ? '↑' : '↓'} {Math.abs(sentiment.putPremiumTrend).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Sentiment Meter */}
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-red-500">Strong Sell</span>
+                    <span className="text-green-500">Strong Buy</span>
+                  </div>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 transition-all duration-500"
+                      style={{ 
+                        width: '100%',
+                        transform: `translateX(${((sentiment.score + 10) / 20) * 100 - 100}%)`
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>-10</span>
+                    <span>0</span>
+                    <span>+10</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
