@@ -717,7 +717,16 @@ export default function OptionChain() {
   const pcr = useMemo(() => (data?.chain ? calculatePCR(data.chain) : 0), [data?.chain])
   const totals = useMemo(() => (data?.chain ? calculateTotals(data.chain) : { ceVolume: 0, peVolume: 0, ceOi: 0, peOi: 0 }), [data?.chain])
   const maxBarValue = useMemo(() => (data?.chain ? getMaxValue(data.chain, barDataSource) : 1), [data?.chain, barDataSource])
-  const sentiment = useMemo(() => (data?.chain ? calculateSentiment(data) : { score: 0, callPremiumTrend: 0, putPremiumTrend: 0, maxPain: 0, strength: 'Weak' }), [data?.chain])
+  const sentiment = useMemo(
+  () => data ? calculateSentiment(data) : { 
+    score: 0, 
+    callPremiumTrend: 0, 
+    putPremiumTrend: 0, 
+    maxPain: 0, 
+    strength: 'Weak' as const
+  }, 
+  [data]
+  )
 
   // Get ordered visible columns for each side
   const visibleCeColumns = useMemo(() => {
@@ -834,7 +843,8 @@ export default function OptionChain() {
 
       {data && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Row 1: Key Metrics - 4 columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4">
                 <div className="text-sm text-muted-foreground">{selectedUnderlying} Spot</div>
@@ -873,70 +883,6 @@ export default function OptionChain() {
                     className="h-full bg-gradient-to-r from-green-500 to-primary transition-all duration-500"
                     style={{ width: totals.ceOi + totals.peOi > 0 ? `${(totals.ceOi / (totals.ceOi + totals.peOi)) * 100}%` : '0%' }}
                   />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>PCR: {pcr.toFixed(2)}</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm text-muted-foreground">Market Sentiment</div>
-                  <div className={`text-sm font-bold ${getSentimentColor(sentiment.score)}`}>
-                    {getSentimentText(sentiment.score)}
-                  </div>
-                </div>
-                
-                {/* Sentiment Indicators */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">PCR Sentiment:</span>
-                    <span className={pcr > 1.3 ? 'text-green-500 font-medium' : pcr < 0.7 ? 'text-red-500 font-medium' : 'text-yellow-500'}>
-                      {pcr > 1.3 ? 'Bullish' : pcr < 0.7 ? 'Bearish' : 'Neutral'}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Max Pain:</span>
-                    <span className="font-medium">{formatPrice(calculateMaxPain(data.chain))}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Call Premium:</span>
-                    <span className={sentiment.callPremiumTrend > 0 ? 'text-green-500' : 'text-red-500'}>
-                      {sentiment.callPremiumTrend > 0 ? '↑' : '↓'} {Math.abs(sentiment.callPremiumTrend).toFixed(1)}%
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Put Premium:</span>
-                    <span className={sentiment.putPremiumTrend > 0 ? 'text-green-500' : 'text-red-500'}>
-                      {sentiment.putPremiumTrend > 0 ? '↑' : '↓'} {Math.abs(sentiment.putPremiumTrend).toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Sentiment Meter */}
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-red-500">Strong Sell</span>
-                    <span className="text-green-500">Strong Buy</span>
-                  </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 transition-all duration-500"
-                      style={{ 
-                        width: '100%',
-                        transform: `translateX(${((sentiment.score + 10) / 20) * 100 - 100}%)`
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>-10</span>
-                    <span>0</span>
-                    <span>+10</span>
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1029,6 +975,74 @@ export default function OptionChain() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                {/* Main Sentiment Score */}
+                <div className="lg:col-span-1">
+                  <div className="text-sm text-muted-foreground mb-2">Market Sentiment</div>
+                  <div className={`text-3xl font-bold ${getSentimentColor(sentiment.score)}`}>
+                    {getSentimentText(sentiment.score)}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Score: {sentiment.score.toFixed(1)}/10
+                  </div>
+                </div>
+
+                {/* Sentiment Meter */}
+                <div className="lg:col-span-2">
+                  <div className="text-sm text-muted-foreground mb-2">Sentiment Scale</div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-red-500 font-medium">Strong Sell</span>
+                    <span className="text-muted-foreground">Neutral</span>
+                    <span className="text-green-500 font-medium">Strong Buy</span>
+                  </div>
+                  <div className="relative h-4 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500" />
+                    <div 
+                      className="absolute top-0 bottom-0 w-1 bg-white shadow-lg transition-all duration-500"
+                      style={{ left: `${((sentiment.score + 10) / 20) * 100}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>-10</span>
+                    <span>0</span>
+                    <span>+10</span>
+                  </div>
+                </div>
+
+                {/* Indicators Grid */}
+                <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">PCR Sentiment</div>
+                    <div className={`text-sm font-semibold ${pcr > 1.3 ? 'text-green-500' : pcr < 0.7 ? 'text-red-500' : 'text-yellow-500'}`}>
+                      {pcr > 1.3 ? 'Bullish' : pcr < 0.7 ? 'Bearish' : 'Neutral'}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Max Pain</div>
+                    <div className="text-sm font-semibold">{formatPrice(calculateMaxPain(data.chain))}</div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Call Premium</div>
+                    <div className={`text-sm font-semibold ${sentiment.callPremiumTrend > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {sentiment.callPremiumTrend > 0 ? '↑' : '↓'} {Math.abs(sentiment.callPremiumTrend).toFixed(1)}%
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Put Premium</div>
+                    <div className={`text-sm font-semibold ${sentiment.putPremiumTrend > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {sentiment.putPremiumTrend > 0 ? '↑' : '↓'} {Math.abs(sentiment.putPremiumTrend).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
