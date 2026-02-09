@@ -209,23 +209,35 @@ function calculateSentiment(data: OptionChainResponse): SentimentData {
   };
 }
 
-function calculatePremiumTrend(chain: OptionStrike[], type: 'ce' | 'pe', atmStrikeValue: number): number {
-  // Compare ATM premium with OTM premiums
+function calculatePremiumTrend(
+  chain: OptionStrike[], 
+  type: 'ce' | 'pe',
+  atmStrikeValue: number
+): number {
   const atmStrike = chain.reduce((prev, curr) => 
     Math.abs(curr.strike - atmStrikeValue) < Math.abs(prev.strike - atmStrikeValue) ? curr : prev
   );
   
   const atmPremium = type === 'ce' ? atmStrike.ce?.ltp : atmStrike.pe?.ltp;
+  
+  // Calculate strike interval from chain
+  const strikeInterval = chain.length > 1 
+    ? Math.abs(chain[1].strike - chain[0].strike) 
+    : atmStrikeValue * 0.01; // fallback to 1%
+  
+  // Find OTM strike that's 1-2 strikes away
+  const targetDistance = strikeInterval * 1.5; // 1.5 strikes away
+  
   const otmStrike = chain.find(s => 
-    type === 'ce' ? s.strike > atmStrike.strike + 50 : s.strike < atmStrike.strike - 50
-    // Add some buffer to ensure we get a truly OTM strike
+    type === 'ce' 
+      ? s.strike >= atmStrike.strike + targetDistance
+      : s.strike <= atmStrike.strike - targetDistance
   );
   
   const otmPremium = otmStrike ? (type === 'ce' ? otmStrike.ce?.ltp : otmStrike.pe?.ltp) : 0;
   
   if (!atmPremium || !otmPremium || otmPremium === 0) return 0;
   
-  // Return percentage difference
   return ((atmPremium - otmPremium) / otmPremium) * 100;
 }
 
